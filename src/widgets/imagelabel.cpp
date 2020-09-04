@@ -45,7 +45,10 @@ void ImageLabel::setScreenshot(const QPixmap &pixmap) {
 
 void ImageLabel::setScaledPixmap() {
     const qreal scale = qApp->devicePixelRatio();
-    QPixmap scaledPixmap = m_pixmap.scaled(size() * scale, Qt::KeepAspectRatio,
+    // divide it by scale so image would be normalized to screen
+    // if we bultiply we get image of double size (scale*scale) as captured image
+    // is pixels with scale applyed.
+    QPixmap scaledPixmap = m_pixmap.scaled(size() / scale, Qt::KeepAspectRatio,
                                            Qt::SmoothTransformation);
     scaledPixmap.setDevicePixelRatio(scale);
     setPixmap(scaledPixmap);
