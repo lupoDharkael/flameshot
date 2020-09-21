@@ -48,6 +48,13 @@ target_sources(flameshot PRIVATE undo/undotool.h undo/undotool.cpp)
 
 target_sources(
   flameshot
+  PRIVATE eyedropper/eyedroppertool.h
+          eyedropper/eyedroppertool.cpp
+          eyedropper/eyedropperwidget.h
+          eyedropper/eyedropperwidget.cpp)
+
+target_sources(
+  flameshot
   PRIVATE abstractactiontool.cpp
           abstractpathtool.cpp
           abstracttwopointtool.cpp
