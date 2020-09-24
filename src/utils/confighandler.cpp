@@ -286,6 +286,18 @@ ConfigHandler::setdrawThickness(const int thickness)
   m_settings.setValue(QStringLiteral("drawThickness"), thickness);
 }
 
+int
+ConfigHandler::pinBorderWidthValue() const
+{
+  return m_settings.value(QStringLiteral("pinBorderWidth"), 7).toInt();
+}
+
+void
+ConfigHandler::setPinBorderWidth(const int value)
+{
+  m_settings.setValue(QStringLiteral("pinBorderWidth"), value);
+}
+
 bool
 ConfigHandler::keepOpenAppLauncherValue()
 {
