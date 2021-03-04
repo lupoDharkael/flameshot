@@ -13,6 +13,7 @@ public:
     ScreenshotSaver(const unsigned id);
 
     void saveToClipboard(const QPixmap& capture);
+    void saveToClipboard(const QString& text);
     bool saveToFilesystem(const QPixmap& capture,
                           const QString& path,
                           const QString& messagePrefix);
