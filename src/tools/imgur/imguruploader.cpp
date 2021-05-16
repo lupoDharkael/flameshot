@@ -17,6 +17,7 @@
 #include <QDrag>
 #include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QHttpMultiPart>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
@@ -36,7 +37,8 @@ ImgurUploader::ImgurUploader(const QPixmap& capture, QWidget* parent)
   : QWidget(parent)
   , m_pixmap(capture)
 {
-    setWindowTitle(tr("Upload to Imgur"));
+    QUrl url = ConfigHandler().uploadUrlValue();
+    setWindowTitle(tr("Upload to %1").arg(url.host()));
     setWindowIcon(QIcon(":img/app/flameshot.svg"));
 
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 10, 0))
@@ -127,22 +129,41 @@ void ImgurUploader::upload()
     QBuffer buffer(&byteArray);
     m_pixmap.save(&buffer, "PNG");
 
-    QUrlQuery urlQuery;
-    urlQuery.addQueryItem(QStringLiteral("title"),
-                          QStringLiteral("flameshot_screenshot"));
-    QString description = FileNameHandler().parsedPattern();
-    urlQuery.addQueryItem(QStringLiteral("description"), description);
+    QHttpMultiPart* multiPart =
+      new QHttpMultiPart(QHttpMultiPart::FormDataType);
 
-    QUrl url(QStringLiteral("https://api.imgur.com/3/image"));
-    url.setQuery(urlQuery);
+    QHttpPart titlePart;
+    titlePart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                        QVariant("form-data; name=\"title\""));
+    titlePart.setBody("flameshot_screenshot");
+
+    QHttpPart descPart;
+    QString desc = FileNameHandler().parsedPattern();
+    descPart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                       QVariant("form-data; name=\"description\""));
+    descPart.setBody(desc.toLatin1());
+
+    QHttpPart imagePart;
+    imagePart.setHeader(QNetworkRequest::ContentTypeHeader,
+                        QVariant("image/png"));
+    imagePart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                        QVariant("form-data; name=\"image\"; filename=\"" +
+                                 desc.toLatin1() + "\""));
+    imagePart.setBody(byteArray);
+
+    multiPart->append(titlePart);
+    multiPart->append(descPart);
+    multiPart->append(imagePart);
+
+    QUrl url = ConfigHandler().uploadUrlValue();
     QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader,
-                      "application/application/x-www-form-urlencoded");
-    request.setRawHeader(
-      "Authorization",
-      QStringLiteral("Client-ID %1").arg(IMGUR_CLIENT_ID).toUtf8());
+    if (!ConfigHandler().isCustomHosting()) {
+        request.setRawHeader(
+          "Authorization",
+          QStringLiteral("Client-ID %1").arg(IMGUR_CLIENT_ID).toUtf8());
+    }
 
-    m_NetworkAM->post(request, byteArray);
+    m_NetworkAM->post(request, multiPart);
 }
 
 void ImgurUploader::onUploadOk()
@@ -170,6 +191,10 @@ void ImgurUploader::onUploadOk()
     m_hLayout->addWidget(m_openUrlButton);
     m_hLayout->addWidget(m_openDeleteUrlButton);
     m_hLayout->addWidget(m_toClipboardButton);
+
+    if (ConfigHandler().isCustomHosting()) {
+        m_openDeleteUrlButton->setEnabled(false);
+    }
 
     connect(
       m_copyUrlButton, &QPushButton::clicked, this, &ImgurUploader::copyURL);

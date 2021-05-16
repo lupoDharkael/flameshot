@@ -6,6 +6,7 @@
 #include "src/widgets/capture/capturetoolbutton.h"
 #include <QSettings>
 #include <QStringList>
+#include <QUrl>
 #include <QVariant>
 #include <QVector>
 
@@ -24,6 +25,10 @@ public:
 
     bool savePathFixed();
     void setSavePathFixed(bool);
+
+    QUrl uploadUrlValue();
+    void setUploadUrl(const QString&);
+    bool isCustomHosting();
 
     QColor uiMainColorValue();
     void setUIMainColor(const QColor&);
