@@ -68,6 +68,7 @@ CaptureWidget::CaptureWidget(uint id,
   , m_selection(nullptr)
   , m_existingObjectIsChanged(false)
   , m_startMove(false)
+  , m_middleClickDrag(false)
 {
     m_undoStack.setUndoLimit(ConfigHandler().undoLimit());
 
@@ -130,9 +131,9 @@ CaptureWidget::CaptureWidget(uint id,
         resize(currentScreen->size());
 #else
         // Comment For CaptureWidget Debugging under Linux
-        setWindowFlags(Qt::BypassWindowManagerHint | Qt::WindowStaysOnTopHint |
+        /*setWindowFlags(Qt::BypassWindowManagerHint | Qt::WindowStaysOnTopHint |
                        Qt::FramelessWindowHint | Qt::Tool);
-        resize(pixmap().size());
+        resize(pixmap().size());*/
 #endif
     }
     // Create buttons
@@ -342,6 +343,7 @@ void CaptureWidget::paintEvent(QPaintEvent* paintEvent)
 {
     Q_UNUSED(paintEvent)
     QPainter painter(this);
+    painter.translate(m_viewOffset);
     painter.drawPixmap(0, 0, m_context.screenshot);
 
     if (m_activeTool && m_mouseIsClicked) {
@@ -502,7 +504,12 @@ void CaptureWidget::mousePressEvent(QMouseEvent* e)
                 m_grabbing = true;
             }
         }
+    }  else if (e->button() == Qt::MiddleButton) {
+        m_middleClickDrag = true;
+        m_dragStartPoint = e->pos();
+        m_initialOffset = m_viewOffset;
     }
+
 
     // Commit current tool if it has edit widget and mouse click is outside
     // of it
@@ -744,6 +751,7 @@ void CaptureWidget::mouseReleaseEvent(QMouseEvent* e)
     m_activeToolIsMoved = false;
     m_newSelection = false;
     m_grabbing = false;
+     m_middleClickDrag = false;
 
     updateCursor();
 }

@@ -21,6 +21,7 @@
 #include <QPointer>
 #include <QUndoStack>
 #include <QWidget>
+#include <qpoint.h>
 
 class QPaintEvent;
 class QResizeEvent;
@@ -195,4 +196,8 @@ private:
     // For start moving after more than X offset
     QPoint m_startMovePos;
     bool m_startMove;
+
+    QPoint m_viewOffset;
+    QPoint m_initialOffset;
+    bool m_middleClickDrag;
 };
