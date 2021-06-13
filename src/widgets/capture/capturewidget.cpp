@@ -31,7 +31,9 @@
 #include <QPaintEvent>
 #include <QPainter>
 #include <QScreen>
+#include <QScrollBar>
 #include <QShortcut>
+#include <QtDebug>
 #include <draggablewidgetmaker.h>
 
 #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_DEBUG
@@ -42,12 +44,15 @@
 // CaptureWidget is the main component used to capture the screen. It contains
 // an area of selection with its respective buttons.
 
+using namespace CaptureConfig;
+
 // enableSaveWindow
 CaptureWidget::CaptureWidget(uint id,
                              const QString& savePath,
-                             bool fullScreen,
+                             CaptureConfig::CaptureWindowMode windowMode,
                              QWidget* parent)
-  : QWidget(parent)
+  : QScrollArea(parent)
+  , windowMode(windowMode)
   , m_mouseIsClicked(false)
   , m_newSelection(false)
   , m_grabbing(false)
@@ -86,13 +91,14 @@ CaptureWidget::CaptureWidget(uint id,
     m_showInitialMsg = m_config.showHelpValue();
     m_opacity = m_config.contrastOpacityValue();
     setMouseTracking(true);
-    initContext(savePath, fullScreen);
+    m_captureCurrentScreen = windowMode == CaptureWindowMode::FullScreenCurrent;
+    initContext(savePath, windowMode != CaptureWindowMode::DebugNonFullScreen);
     initShortcuts();
-#if (defined(Q_OS_WIN) || defined(Q_OS_MACOS))
+
     // Top left of the whole set of screens
     QPoint topLeft(0, 0);
-#endif
-    if (fullScreen) {
+
+    if (windowMode != CaptureWindowMode::DebugNonFullScreen) {
         // Grab Screenshot
         bool ok = true;
         m_context.screenshot = ScreenGrabber().grabEntireDesktop(ok);
@@ -102,70 +108,82 @@ CaptureWidget::CaptureWidget(uint id,
         }
         m_context.origScreenshot = m_context.screenshot;
 
+        if (windowMode == CaptureWindowMode::FullScreenAll) {
 #if defined(Q_OS_WIN)
-        setWindowFlags(Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint |
-                       Qt::Popup);
-
-        for (QScreen* const screen : QGuiApplication::screens()) {
-            QPoint topLeftScreen = screen->geometry().topLeft();
-
-            if (topLeftScreen.x() < topLeft.x()) {
-                topLeft.setX(topLeftScreen.x());
-            }
-            if (topLeftScreen.y() < topLeft.y()) {
-                topLeft.setY(topLeftScreen.y());
-            }
-        }
-        move(topLeft);
-        resize(pixmap().size());
-#elif defined(Q_OS_MACOS)
-        // Emulate fullscreen mode
-        //        setWindowFlags(Qt::WindowStaysOnTopHint |
-        //        Qt::BypassWindowManagerHint |
-        //                       Qt::FramelessWindowHint |
-        //                       Qt::NoDropShadowWindowHint | Qt::ToolTip |
-        //                       Qt::Popup
-        //                       );
-        QScreen* currentScreen = QGuiAppCurrentScreen().currentScreen();
-        move(currentScreen->geometry().x(), currentScreen->geometry().y());
-        resize(currentScreen->size());
+            setWindowFlags(Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint |
+                           Qt::Popup);
 #else
-        // Comment For CaptureWidget Debugging under Linux
-        /*setWindowFlags(Qt::BypassWindowManagerHint | Qt::WindowStaysOnTopHint |
-                       Qt::FramelessWindowHint | Qt::Tool);
-        resize(pixmap().size());*/
+            setWindowFlags(Qt::BypassWindowManagerHint |
+                           Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint |
+                           Qt::Tool);
 #endif
+
+            for (QScreen* const screen : QGuiApplication::screens()) {
+                QPoint topLeftScreen = screen->geometry().topLeft();
+
+                if (topLeftScreen.x() < topLeft.x()) {
+                    topLeft.setX(topLeftScreen.x());
+                }
+                if (topLeftScreen.y() < topLeft.y()) {
+                    topLeft.setY(topLeftScreen.y());
+                }
+            }
+            move(topLeft);
+            resize(pixmap().size());
+        } else if (windowMode == CaptureWindowMode::FullScreenCurrent) {
+            // Emulate fullscreen mode
+            //        setWindowFlags(Qt::WindowStaysOnTopHint |f
+            //        Qt::BypassWindowManagerHint |
+            //                       Qt::FramelessWindowHint |
+            //                       Qt::NoDropShadowWindowHint | Qt::ToolTip |
+            //                       Qt::Popup
+            //                       );
+            QScreen* currentScreen = QGuiAppCurrentScreen().currentScreen();
+            move(currentScreen->geometry().x(), currentScreen->geometry().y());
+            resize(currentScreen->size());
+        } else if (windowMode == CaptureWindowMode::MaximizeWindow) {
+        }
     }
+    // setViewport(nullptr);
+    // auto content = viewport();
+    auto content2 = new QWidget(this);
+    setWidget(content2);
+    content2->resize(m_context.screenshot.size());
+    // setAttribute( Qt::WA_NoSystemBackground, true );
+    // setAttribute( Qt::WA_OpaquePaintEvent, false );
+    // content->resize(200, 200);
+    // content->setAttribute( Qt::WA_NoSystemBackground, true );
+    // content->setAttribute( Qt::WA_OpaquePaintEvent, false );
     // Create buttons
     m_buttonHandler = new ButtonHandler(this);
     updateButtons();
     QVector<QRect> areas;
-    if (m_context.fullscreen) {
+    if (windowMode != DebugNonFullScreen) {
         QPoint topLeftOffset = QPoint(0, 0);
 #if defined(Q_OS_WIN)
         topLeftOffset = topLeft;
 #endif
 
-#if defined(Q_OS_MACOS)
-        // MacOS works just with one active display, so we need to append
-        // just one current display and keep multiple displays logic for
-        // other OS
-        QRect r;
-        QScreen* screen = QGuiAppCurrentScreen().currentScreen();
-        r = screen->geometry();
-        // all calculations are processed according to (0, 0) start
-        // point so we need to move current object to (0, 0)
-        r.moveTo(0, 0);
-        areas.append(r);
-#else
-        for (QScreen* const screen : QGuiApplication::screens()) {
-            QRect r = screen->geometry();
-            r.moveTo(r.x() / screen->devicePixelRatio(),
-                     r.y() / screen->devicePixelRatio());
-            r.moveTo(r.topLeft() - topLeftOffset);
+        if (m_captureCurrentScreen) {
+            // MacOS works just with one active display, so we need to append
+            // just one current display and keep multiple displays logic for
+            // other OS
+            QRect r;
+            QScreen* screen = QGuiAppCurrentScreen().currentScreen();
+            r = screen->geometry();
+            // all calculations are processed according to (0, 0) start
+            // point so we need to move current object to (0, 0)
+            r.moveTo(0, 0);
             areas.append(r);
+        } else {
+            for (QScreen* const screen : QGuiApplication::screens()) {
+                QRect r = screen->geometry();
+                r.moveTo(r.x() / screen->devicePixelRatio(),
+                         r.y() / screen->devicePixelRatio());
+                r.moveTo(r.topLeft() - topLeftOffset);
+                areas.append(r);
+            }
         }
-#endif
     } else {
         areas.append(rect());
     }
@@ -215,7 +233,7 @@ void CaptureWidget::updateButtons()
             m_sizeIndButton = b;
         }
         b->setColor(m_uiColor);
-        makeChild(b);
+        makeChildMoving(b);
 
         switch (t) {
             case CaptureToolButton::ButtonType::TYPE_EXIT:
@@ -342,17 +360,21 @@ void CaptureWidget::uncheckActiveTool()
 void CaptureWidget::paintEvent(QPaintEvent* paintEvent)
 {
     Q_UNUSED(paintEvent)
-    QPainter painter(this);
-    painter.translate(m_viewOffset);
+    QPainter painter(viewport());
+    painter.save();
+    painter.setTransform(m_viewTransform.inverted());
     painter.drawPixmap(0, 0, m_context.screenshot);
+    painter.restore();
 
     if (m_activeTool && m_mouseIsClicked) {
         painter.save();
+        painter.setTransform(m_viewTransform.inverted());
         m_activeTool->process(painter, m_context.screenshot);
         painter.restore();
     } else if (m_previewEnabled && m_activeButton && m_activeButton->tool() &&
                m_activeButton->tool()->showMousePreview()) {
         painter.save();
+        painter.setTransform(m_viewTransform.inverted());
         m_activeButton->tool()->paintMousePreview(painter, m_context);
         painter.restore();
     }
@@ -408,7 +430,7 @@ bool CaptureWidget::startDrawObjectTool(const QPoint& pos)
                 &CaptureTool::requestAction,
                 this,
                 &CaptureWidget::handleButtonSignal);
-        m_context.mousePos = pos;
+        m_context.mousePos = widgetToCapturePoint(pos);
         m_activeTool->drawStart(m_context);
         if (m_activeTool->nameID() == ToolType::CIRCLECOUNT) {
             // While it is based on AbstractTwoPointTool it has the only one
@@ -504,12 +526,12 @@ void CaptureWidget::mousePressEvent(QMouseEvent* e)
                 m_grabbing = true;
             }
         }
-    }  else if (e->button() == Qt::MiddleButton) {
+    } else if (e->button() == Qt::MiddleButton && allowMoving()) {
         m_middleClickDrag = true;
         m_dragStartPoint = e->pos();
         m_initialOffset = m_viewOffset;
+        updateViewTransform();
     }
-
 
     // Commit current tool if it has edit widget and mouse click is outside
     // of it
@@ -547,7 +569,7 @@ void CaptureWidget::mouseDoubleClickEvent(QMouseEvent* event)
 
 void CaptureWidget::mouseMoveEvent(QMouseEvent* e)
 {
-    m_context.mousePos = e->pos();
+    m_context.mousePos = widgetToCapturePoint(e->pos());
     bool symmetryMod = qApp->keyboardModifiers() & Qt::ShiftModifier;
 
     int activeLayerIndex = -1;
@@ -659,9 +681,9 @@ void CaptureWidget::mouseMoveEvent(QMouseEvent* e)
     } else if (m_mouseIsClicked && m_activeTool) {
         // drawing with a tool
         if (m_adjustmentButtonPressed) {
-            m_activeTool->drawMoveWithAdjustment(e->pos());
+            m_activeTool->drawMoveWithAdjustment(m_context.mousePos);
         } else {
-            m_activeTool->drawMove(e->pos());
+            m_activeTool->drawMove(m_context.mousePos);
         }
         update();
         // Hides the buttons under the mouse. If the mouse leaves, it shows
@@ -678,6 +700,11 @@ void CaptureWidget::mouseMoveEvent(QMouseEvent* e)
     } else if (m_activeButton && m_activeButton->tool() &&
                m_activeButton->tool()->showMousePreview()) {
         update();
+    } else if (m_middleClickDrag) {
+        m_viewOffset = (m_initialOffset + -(e->pos() - m_dragStartPoint));
+        qDebug() << "change view offfset 1 " << m_viewOffset;
+        updateViewTransform();
+        repaint();
     } else {
         if (!m_selection->isVisible()) {
             return;
@@ -751,7 +778,7 @@ void CaptureWidget::mouseReleaseEvent(QMouseEvent* e)
     m_activeToolIsMoved = false;
     m_newSelection = false;
     m_grabbing = false;
-     m_middleClickDrag = false;
+    m_middleClickDrag = false;
 
     updateCursor();
 }
@@ -874,6 +901,19 @@ void CaptureWidget::moveEvent(QMoveEvent* e)
 {
     QWidget::moveEvent(e);
     m_context.widgetOffset = mapToGlobal(QPoint(0, 0));
+}
+
+void CaptureWidget::scrollContentsBy(int dx, int dy)
+{
+    Q_UNUSED(dx);
+    Q_UNUSED(dy);
+
+    m_viewOffset =
+      (QPointF(horizontalScrollBar()->value(), verticalScrollBar()->value()) *
+       m_viewScale)
+        .toPoint();
+    updateViewTransform(false);
+    QScrollArea::scrollContentsBy(dx, dy);
 }
 
 void CaptureWidget::initContext(const QString& savePath, bool fullscreen)
@@ -1012,7 +1052,7 @@ void CaptureWidget::showAppUpdateNotification(const QString& appLatestVersion,
 
 void CaptureWidget::initSelection()
 {
-    m_selection = new SelectionWidget(m_uiColor, this);
+    m_selection = new SelectionWidget(m_uiColor, widget());
     connect(m_selection, &SelectionWidget::animationEnded, this, [this]() {
         this->m_buttonHandler->updatePosition(this->m_selection->geometry());
     });
@@ -1560,6 +1600,37 @@ void CaptureWidget::makeChild(QWidget* w)
     w->installEventFilter(m_eventFilter);
 }
 
+void CaptureWidget::makeChildMoving(QWidget* w)
+{
+    w->setParent(this->widget());
+    w->installEventFilter(m_eventFilter);
+}
+
+bool CaptureWidget::allowMoving()
+{
+    return windowMode == CaptureWindowMode::MaximizeWindow;
+}
+
+void CaptureWidget::updateViewTransform(bool updateScrollbars)
+{
+    if (!updateScrollbars) {
+        m_viewTransform =
+          QTransform::fromTranslate(m_viewOffset.x(), m_viewOffset.y());
+        m_viewTransform.scale(m_viewScale, m_viewScale);
+    } else {
+        auto b = m_viewOffset;
+        horizontalScrollBar()->setValue(b.x());
+        verticalScrollBar()->setValue(b.y());
+        m_viewOffset = QPoint(horizontalScrollBar()->value(), verticalScrollBar()->value());
+    }
+}
+
+QPoint CaptureWidget::widgetToCapturePoint(QPoint point)
+{
+    return m_viewTransform.map(point);
+    //return m_viewOffset + point * m_viewScale;
+}
+
 void CaptureWidget::togglePanel()
 {
     m_panel->toggle();
@@ -1617,6 +1688,30 @@ void CaptureWidget::setCaptureToolObjects(
     // Used for undo/redo
     m_captureToolObjects = captureToolObjects;
     drawToolsData(true, true);
+}
+
+void CaptureWidget::OpenAndShow()
+{
+    switch (windowMode) {
+        case FullScreenAll:
+#if defined(Q_OS_WIN)
+            show();
+#else
+            showFullScreen();
+#endif
+            break;
+        case FullScreenCurrent:
+            showFullScreen();
+            activateWindow();
+            raise();
+            break;
+        case MaximizeWindow:
+            showMaximized();
+            break;
+        case DebugNonFullScreen:
+            show();
+            break;
+    }
 }
 
 void CaptureWidget::undo()
@@ -1708,11 +1803,13 @@ void CaptureWidget::drawInitialMessage(QPainter* painter)
 
 void CaptureWidget::drawInactiveRegion(QPainter* painter)
 {
+    QTransform captureToView = m_viewTransform.inverted();
     QColor overlayColor(0, 0, 0, m_opacity);
     painter->setBrush(overlayColor);
     QRect r;
     if (m_selection->isVisible()) {
         r = m_selection->geometry().normalized().adjusted(0, 0, -1, -1);
+        r = captureToView.mapRect(r);
     }
     QRegion grey(rect());
     grey = grey.subtracted(r);
@@ -1727,7 +1824,7 @@ void CaptureWidget::drawInactiveRegion(QPainter* painter)
         painter->setRenderHint(QPainter::Antialiasing);
         painter->setBrush(m_uiColor);
         for (auto rect : m_selection->handlerAreas()) {
-            painter->drawRoundedRect(rect, 100, 100);
+            painter->drawRoundedRect(captureToView.mapRect(rect), 100, 100);
         }
     }
 }

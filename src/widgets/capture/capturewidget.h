@@ -18,9 +18,11 @@
 #include "src/tools/capturetool.h"
 #include "src/utils/confighandler.h"
 #include "src/widgets/capture/selectionwidget.h"
+#include "src/widgets/capture/captureconfig.h"
 #include <QPointer>
 #include <QUndoStack>
 #include <QWidget>
+#include <QScrollArea>
 #include <qpoint.h>
 
 class QPaintEvent;
@@ -35,14 +37,15 @@ class UpdateNotificationWidget;
 class UtilityPanel;
 class SidePanelWidget;
 
-class CaptureWidget : public QWidget
+class CaptureWidget : public QScrollArea
 {
     Q_OBJECT
 
 public:
+
     explicit CaptureWidget(uint id = 0,
                            const QString& savePath = QString(),
-                           bool fullScreen = true,
+                           CaptureConfig::CaptureWindowMode windowMode = CaptureConfig::CaptureWindowMode::FullScreenAll,
                            QWidget* parent = nullptr);
     ~CaptureWidget();
 
@@ -51,6 +54,7 @@ public:
     void showAppUpdateNotification(const QString& appLatestVersion,
                                    const QString& appLatestUrl);
     void setCaptureToolObjects(const CaptureToolObjects& captureToolObjects);
+    void OpenAndShow();
 
 public slots:
     bool commitCurrentTool();
@@ -107,6 +111,7 @@ protected:
     void wheelEvent(QWheelEvent* wheelEvent) override;
     void resizeEvent(QResizeEvent* resizeEvent) override;
     void moveEvent(QMoveEvent* moveEvent) override;
+    void scrollContentsBy(int dx, int dy) override;
 
 private:
     void loadDrawThickness();
@@ -115,7 +120,7 @@ private:
     void uncheckActiveTool();
     int selectToolItemAtPos(const QPoint& pos);
     void showColorPicker(const QPoint& pos);
-    bool startDrawObjectTool(const QPoint& pos);
+    bool startDrawObjectTool(const QPoint& pos); // widget coordinates
     QPointer<CaptureTool> activeToolObject();
     void initContext(const QString& savePath, bool fullscreen);
     void initPanel();
@@ -125,6 +130,10 @@ private:
     void updateCursor();
     void pushToolToStack();
     void makeChild(QWidget* w);
+    void makeChildMoving(QWidget* w);
+    bool allowMoving();
+    void updateViewTransform(bool updateScrollbars = true);
+    QPoint widgetToCapturePoint(QPoint point);
 
     void repositionSelection(QRect r);
     void adjustSelection(QMargins m);
@@ -143,6 +152,8 @@ private:
 
     // Context information
     CaptureContext m_context;
+    CaptureConfig::CaptureWindowMode windowMode;
+    bool m_captureCurrentScreen;
 
     // Main ui color
     QColor m_uiColor;
@@ -186,7 +197,7 @@ private:
     CaptureToolObjects m_captureToolObjects;
     CaptureToolObjects m_captureToolObjectsBackup;
 
-    QPoint m_mousePressedPos;
+    QPoint m_mousePressedPos; // widget coordinates
     QPoint m_activeToolOffsetToMouseOnStart;
 
     QUndoStack m_undoStack;
@@ -197,7 +208,9 @@ private:
     QPoint m_startMovePos;
     bool m_startMove;
 
+    QTransform m_viewTransform; // window to capture transform
     QPoint m_viewOffset;
+    float m_viewScale = 1.0f;
     QPoint m_initialOffset;
     bool m_middleClickDrag;
 };
