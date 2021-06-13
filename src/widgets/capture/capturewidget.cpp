@@ -92,7 +92,9 @@ CaptureWidget::CaptureWidget(uint id,
     m_opacity = m_config.contrastOpacityValue();
     setMouseTracking(true);
     m_captureCurrentScreen = windowMode == CaptureWindowMode::FullScreenCurrent;
-    initContext(savePath, windowMode == CaptureWindowMode::FullScreenAll || windowMode == CaptureWindowMode::FullScreenCurrent);
+    initContext(savePath,
+                windowMode == CaptureWindowMode::FullScreenAll ||
+                  windowMode == CaptureWindowMode::FullScreenCurrent);
     initShortcuts();
 
     // Top left of the whole set of screens
@@ -144,16 +146,11 @@ CaptureWidget::CaptureWidget(uint id,
         } else if (windowMode == CaptureWindowMode::MaximizeWindow) {
         }
     }
-    // setViewport(nullptr);
-    // auto content = viewport();
-    auto content2 = new QWidget(this);
-    setWidget(content2);
-    content2->resize(m_context.screenshot.size());
-    // setAttribute( Qt::WA_NoSystemBackground, true );
-    // setAttribute( Qt::WA_OpaquePaintEvent, false );
-    // content->resize(200, 200);
-    // content->setAttribute( Qt::WA_NoSystemBackground, true );
-    // content->setAttribute( Qt::WA_OpaquePaintEvent, false );
+
+    setWidget(new QWidget(this));
+    widget()->resize(m_context.screenshot.size());
+    widget()->setMouseTracking(true);
+
     // Create buttons
     m_buttonHandler = new ButtonHandler(this);
     updateButtons();
@@ -494,9 +491,6 @@ void CaptureWidget::mousePressEvent(QMouseEvent* e)
     auto scrollWidgetPos = scrollWidgetPoint(
       m_mousePressedPos); // position relative to ScrollArea::widget
     auto capturePoint = widgetToCapturePoint(m_mousePressedPos);
-    qDebug() << "zzz " << e->pos() << " "
-             << " " << viewport()->geometry() << " " << widget()->geometry()
-             << " " << m_viewOffset;
 
     // reset object selection if capture area selection is active
     if (m_selection->getMouseSide(scrollWidgetPos) !=
@@ -626,16 +620,19 @@ void CaptureWidget::mouseMoveEvent(QMouseEvent* e)
         if (m_newSelection) {
             // Drawing a new selection
             inputRect = symmetryMod
-                          ? QRect(widgetToCapturePoint(m_dragStartPoint) * 2 - m_context.mousePos,
+                          ? QRect(widgetToCapturePoint(m_dragStartPoint) * 2 -
+                                    m_context.mousePos,
                                   m_context.mousePos)
-                          : QRect(widgetToCapturePoint(m_dragStartPoint) , m_context.mousePos);
+                          : QRect(widgetToCapturePoint(m_dragStartPoint),
+                                  m_context.mousePos);
 
         } else if (m_mouseOverHandle == SelectionWidget::NO_SIDE) {
             // Moving the whole selection
             if (m_adjustmentButtonPressed || activeToolObject().isNull()) {
                 setCursor(Qt::OpenHandCursor);
                 QRect initialRect = m_selection->savedGeometry().normalized();
-                inputRect = initialRect.translated((e->pos() - m_dragStartPoint) * m_viewScale);
+                inputRect = initialRect.translated(
+                  (e->pos() - m_dragStartPoint) * m_viewScale);
             } else {
                 return;
             }
@@ -683,7 +680,8 @@ void CaptureWidget::mouseMoveEvent(QMouseEvent* e)
                 }
             }
         }
-        m_selection->setCaptureGeometry(inputRect.intersected(m_context.screenshot.rect()).normalized());
+        m_selection->setCaptureGeometry(
+          inputRect.intersected(m_context.screenshot.rect()).normalized());
         update();
     } else if (m_mouseIsClicked && m_activeTool) {
         // drawing with a tool
@@ -709,14 +707,14 @@ void CaptureWidget::mouseMoveEvent(QMouseEvent* e)
         update();
     } else if (m_middleClickDrag) {
         m_viewOffset = (m_initialOffset + -(e->pos() - m_dragStartPoint));
-        qDebug() << "change view offfset 1 " << m_viewOffset;
         updateViewTransform();
         repaint();
     } else {
         if (!m_selection->isVisible()) {
             return;
         }
-        m_mouseOverHandle = m_selection->getMouseSide(scrollWidgetPoint(e->pos()));
+        m_mouseOverHandle =
+          m_selection->getMouseSide(scrollWidgetPoint(e->pos()));
         updateCursor();
     }
 }
@@ -763,7 +761,8 @@ void CaptureWidget::mouseReleaseEvent(QMouseEvent* e)
         // of a new one.
 
         // Don't go outside
-        QRect newGeometry = m_selection->captureGeomtry().intersected(m_context.screenshot.rect());
+        QRect newGeometry = m_selection->captureGeomtry().intersected(
+          m_context.screenshot.rect());
         newGeometry.normalized();
         // normalize
         if (newGeometry.width() <= 0) {
@@ -777,9 +776,13 @@ void CaptureWidget::mouseReleaseEvent(QMouseEvent* e)
             newGeometry.setBottom(top);
         }
         m_selection->setCaptureGeometry(newGeometry);
-        m_context.selection = newGeometry; //extendedRect(&newGeometry); //TODO: cleanup
+        m_context.selection =
+          newGeometry; // extendedRect(&newGeometry); //TODO: cleanup
         updateSizeIndicator();
-        m_buttonHandler->updatePosition(m_selection->geometry()); //TODO: take into account device pixel ratio, window geometry, scrollArea offset ...
+        m_buttonHandler->updatePosition(
+          m_selection
+            ->geometry()); // TODO: take into account device pixel ratio, window
+                           // geometry, scrollArea offset ...
         m_buttonHandler->show();
     }
     m_mouseIsClicked = false;
@@ -1320,8 +1323,10 @@ void CaptureWidget::repositionSelection(QRect r)
 {
     if (m_selection->isVisible()) {
         m_selection->setCaptureGeometry(r);
-        QRect newGeometry = m_selection->geometry().intersected(m_context.screenshot.rect());
-        m_context.selection = newGeometry;// extendedRect(&newGeometry); //TODO: handle stuff
+        QRect newGeometry =
+          m_selection->geometry().intersected(m_context.screenshot.rect());
+        m_context.selection =
+          newGeometry; // extendedRect(&newGeometry); //TODO: handle stuff
         m_buttonHandler->updatePosition(m_selection->geometry());
         updateSizeIndicator();
         update();
@@ -1360,7 +1365,8 @@ void CaptureWidget::selectAll()
 {
     QRect newGeometry = m_context.screenshot.rect();
     m_selection->setCaptureGeometry(newGeometry);
-    m_context.selection = newGeometry;//extendedRect(&newGeometry); //TODO: handle all
+    m_context.selection =
+      newGeometry; // extendedRect(&newGeometry); //TODO: handle all
     m_selection->setVisible(true);
     m_showInitialMsg = false;
     m_buttonHandler->updatePosition(m_selection->geometry());
@@ -1767,8 +1773,8 @@ QRect CaptureWidget::extendedSelection() const
         return QRect();
     }
     return m_selection->captureGeomtry();
-    //QRect r = m_selection->geometry(); //TODO: cleanup
-    //return extendedRect(&r);
+    // QRect r = m_selection->geometry(); //TODO: cleanup
+    // return extendedRect(&r);
 }
 
 QRect CaptureWidget::extendedRect(QRect* r) const
