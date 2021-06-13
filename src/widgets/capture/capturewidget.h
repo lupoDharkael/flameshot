@@ -134,6 +134,9 @@ private:
     bool allowMoving();
     void updateViewTransform(bool updateScrollbars = true);
     QPoint widgetToCapturePoint(QPoint point);
+    QPoint scrollWidgetPoint(QPoint);
+    QPoint scrollPosition() const;
+    void updateButtonRegions();
 
     void repositionSelection(QRect r);
     void adjustSelection(QMargins m);
