@@ -295,8 +295,7 @@ void Controller::startVisualCapture(const uint id,
             return;
         }
 
-        //m_captureWindow = new CaptureWidget(id, forcedSavePath, ConfigHandler().windowMode());
-        m_captureWindow = new CaptureWidget(id, forcedSavePath, CaptureConfig::MaximizeWindow);
+        m_captureWindow = new CaptureWidget(id, forcedSavePath, ConfigHandler().windowMode());
         // m_captureWindow = new CaptureWidget(id, forcedSavePath, false); //
         // debug
         connect(m_captureWindow,
