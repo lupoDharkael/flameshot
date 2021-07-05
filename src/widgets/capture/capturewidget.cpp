@@ -463,10 +463,11 @@ int CaptureWidget::selectToolItemAtPos(const QPoint& pos)
         m_captureToolObjects.captureToolObjects().size() > 0 &&
         m_selection->getMouseSide(scrollWidgetPoint(pos)) ==
           SelectionWidget::NO_SIDE) {
+        auto capturePoint = widgetToCapturePoint(pos);
         auto toolItem = activeToolObject();
         if (!toolItem ||
-            (toolItem && !toolItem->selectionRect().contains(pos))) {
-            activeLayerIndex = m_captureToolObjects.find(pos, size());
+            (toolItem && !toolItem->selectionRect().contains(capturePoint))) {
+            activeLayerIndex = m_captureToolObjects.find(capturePoint, size());
             int thickness_old = m_context.thickness;
             m_panel->setActiveLayer(activeLayerIndex);
             drawObjectSelection();
@@ -750,7 +751,7 @@ void CaptureWidget::mouseReleaseEvent(QMouseEvent* e)
                 // Try to select existing tool if it was in the selection area
                 // but need to select another one
                 m_panel->setActiveLayer(
-                  m_captureToolObjects.find(e->pos(), size()));
+                  m_captureToolObjects.find(widgetToCapturePoint(e->pos()), size()));
             }
             drawToolsData(true, true);
         }
